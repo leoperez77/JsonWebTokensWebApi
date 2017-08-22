@@ -7,7 +7,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using System.Web;
-
+using AuthorizationServer.Data;
 namespace AuthorizationServer.Api.Providers
 {
     public class CustomOAuthProvider : OAuthAuthorizationServerProvider
@@ -19,24 +19,35 @@ namespace AuthorizationServer.Api.Providers
             string clientSecret = string.Empty;
             string symmetricKeyAsBase64 = string.Empty;
 
+            //first try to get the client details from the Authorization Basic header
             if (!context.TryGetBasicCredentials(out clientId, out clientSecret))
             {
+                //no details in the Authorization Header so try to find matching post values
                 context.TryGetFormCredentials(out clientId, out clientSecret);
             }
 
-            if (context.ClientId == null)
+            if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
             {
-                context.SetError("invalid_clientId", "client_Id is not set");
+                context.SetError("client_not_authorized", "invalid client details");
                 return Task.FromResult<object>(null);
             }
 
-            var audience = AudiencesStore.FindAudience(context.ClientId);
+            var dataLayer = new RepoManager(new DataLayerDapper()).DataLayer;
+            var audienceDto = dataLayer.GetAudience(clientId);
 
-            if (audience == null)
+            if (audienceDto == null || !clientSecret.Equals(audienceDto.Secret))
             {
-                context.SetError("invalid_clientId", string.Format("Invalid client_id '{0}'", context.ClientId));
+                context.SetError("unauthorized_client", "unauthorized client");
                 return Task.FromResult<object>(null);
             }
+
+            //var audience = AudiencesStore.FindAudience(context.ClientId);
+
+            //if (audience == null)
+            //{
+            //    context.SetError("invalid_clientId", string.Format("Invalid client_id '{0}'", context.ClientId));
+            //    return Task.FromResult<object>(null);
+            //}
 
             context.Validated();
             return Task.FromResult<object>(null);
@@ -44,9 +55,8 @@ namespace AuthorizationServer.Api.Providers
 
         public override Task GrantResourceOwnerCredentials(OAuthGrantResourceOwnerCredentialsContext context)
         {
-
             context.OwinContext.Response.Headers.Add("Access-Control-Allow-Origin", new[] { "*" });
-
+            
             //Dummy check here, you need to do your DB checks against memebrship system http://bit.ly/SPAAuthCode
             //if (context.UserName != context.Password)
             //{
@@ -55,20 +65,20 @@ namespace AuthorizationServer.Api.Providers
             //    return Task.FromResult<object>(null);
             //}
 
-            if (context.Password  != "Mutombo")
-            {
-                context.SetError("invalid_grant", "The user name or password is incorrect");
-                //return;
-                return Task.FromResult<object>(null);
-            }
+            //if (context.Password  != "Mutombo")
+            //{
+            //    context.SetError("invalid_grant", "The user name or password is incorrect");
+            //    return Task.FromResult<object>(null);
+            //}
 
             var identity = new ClaimsIdentity("JWT");
 
+            //identity.AddClaim(new Claim(ClaimTypes.Name, context.UserName));
+            //identity.AddClaim(new Claim("sub", context.UserName));
+            //identity.AddClaim(new Claim(ClaimTypes.Role, "Manager"));
+            //identity.AddClaim(new Claim(ClaimTypes.Role, "Supervisor"));
+            identity.AddClaim(new Claim("clientID", context.ClientId));
             identity.AddClaim(new Claim(ClaimTypes.Name, context.UserName));
-            identity.AddClaim(new Claim("sub", context.UserName));
-            identity.AddClaim(new Claim(ClaimTypes.Role, "Manager"));
-            identity.AddClaim(new Claim(ClaimTypes.Role, "Supervisor"));
-
             var props = new AuthenticationProperties(new Dictionary<string, string>
                 {
                     {

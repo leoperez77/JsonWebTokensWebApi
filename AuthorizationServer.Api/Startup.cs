@@ -33,7 +33,7 @@ namespace AuthorizationServer.Api
                 TokenEndpointPath = new PathString("/oauth2/token"),
                 AccessTokenExpireTimeSpan = TimeSpan.FromMinutes(30),
                 Provider = new CustomOAuthProvider(),
-                AccessTokenFormat = new CustomJwtFormat("http://ksjwtauth.azurewebsites.net")
+                AccessTokenFormat = new CustomJwtFormat("http://koalaauthapi.azurewebsites.net")
             };
 
             // OAuth 2.0 Bearer Access Token Generation
